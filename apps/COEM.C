@@ -454,7 +454,7 @@ template <class vertex> void compute(graph<vertex> &G, commandLine config) {
   string seeds_file_path =
       config.getOptionValue("-seedsFile", PARTITION_FILE_DEFAULT);
 
-  double epsilon = 0.01d;
+  double epsilon = 0.01;
 
   CoemInfo<vertex> global_info(&G, n, epsilon);
 

@@ -27,6 +27,7 @@
 #include "../graph/IO.h"
 #include "../graph/graph.h"
 #include <string>
+#include <sstream>
 
 /**
  * Used to extract values from the binary stream

@@ -8,4 +8,6 @@
 *.dll
 lib/
 .vscode/
+cmake-build-debug/*
+outputs/*
 

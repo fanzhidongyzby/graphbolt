@@ -48,7 +48,9 @@ public:
 #ifdef EDGEDATA
 #else
   uint16_t getWeight(uintV u, uintV v) {
-    return (uint16_t)((u + v) % weight_cap + 1);
+    // return (uint16_t)((u + v) % weight_cap + 1);
+    // edge weight default to 1
+    return 1;
   }
 #endif
 

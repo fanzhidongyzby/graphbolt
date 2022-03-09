@@ -288,7 +288,7 @@ void printAdditionalData(ofstream &output_file, const uintV &v,
 template <class vertex> void compute(graph<vertex> &G, commandLine config) {
   uintV n = G.n;
   int max_iters = config.getOptionLongValue("-maxIters", 10);
-  double epsilon = config.getOptionDoubleValue("-epsilon", 0.01d);
+  double epsilon = config.getOptionDoubleValue("-epsilon", 0.01);
   max_iters += 1;
   double damping = 0.85;
 
