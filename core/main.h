@@ -49,20 +49,32 @@ int parallel_main(int argc, char *argv[]) {
 
   cout << fixed;
 
+  timer t;
   if (symmetric) {
     // symmetric graph
+    t.start();
     graph<symmetricVertex> G =
         readGraph<symmetricVertex>(iFile, symmetric, simpleFlag, debugFlag);
     G.setSymmetric(true);
-    cout << "Graph created" << endl;
+    cout << "Graph created : " << t.stop() << endl;
+
+    t.start();
     compute(G, P);
+    cout << "Graph compute : " << t.stop() << endl;
+
     G.del();
+
   } else {
     // asymmetric graph
+    t.start();
     graph<asymmetricVertex> G =
         readGraph<asymmetricVertex>(iFile, symmetric, simpleFlag, debugFlag);
-    cout << "Graph created" << endl;
+    cout << "Graph created : " << t.stop() << endl;
+
+    t.start();
     compute(G, P);
+    cout << "Graph compute : " << t.stop() << endl;
+
     G.del();
   }
 }

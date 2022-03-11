@@ -534,7 +534,6 @@ public:
         output_file << vertex_values[converged_iteration][v] << "\n";
       }
     }
-    cout << "\n";
   }
   // ======================================================================
   // RUN AND INITIAL COMPUTE
@@ -546,13 +545,25 @@ public:
     // Incremental Compute - Get the next update batch from ingestor
     // ======================================================================
     ingestor.validateAndOpenFifo();
-    while (ingestor.processNextBatch()) {
+
+    timer t;
+    while (true) {
+      t.start();
+      bool hasNextBatch = ingestor.processNextBatch();
+      cout << "Batch load cost : " << t.stop() << endl;
+      if (!hasNextBatch) {
+        break;
+      }
+
       current_batch++;
       edgeArray &edge_additions = ingestor.getEdgeAdditions();
       edgeArray &edge_deletions = ingestor.getEdgeDeletions();
       // ingestor.edge_additions and ingestor.edge_deletions have been added
       // to the graph datastructure. Now, refine using it.
+
+      t.start();
       deltaCompute(edge_additions, edge_deletions);
+      cout << "Delta compute (" << current_batch << ") cost : " << t.stop() << endl;
     }
     freeTemporaryStructures();
   }

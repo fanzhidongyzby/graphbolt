@@ -113,7 +113,7 @@ public:
   }
 
   void cleanup() {
-    cout << "Current_batch: " << current_batch << endl;
+    cout << endl << "Current_batch: " << current_batch << endl;
     if (current_batch > 0) {
       edge_additions.del();
       edge_deletions.del();

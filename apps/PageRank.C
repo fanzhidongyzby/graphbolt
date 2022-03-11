@@ -294,11 +294,13 @@ template <class vertex> void compute(graph<vertex> &G, commandLine config) {
 
   PageRankInfo<vertex> global_info(&G, n, epsilon, damping);
 
+  timer t;
+  t.start();
   cout << "Initializing engine ....\n";
   GraphBoltEngineSimple<vertex, double, double, PageRankInfo<vertex>> engine(
       G, max_iters, global_info, false, config);
   engine.init();
-  cout << "Finished initializing engine\n";
+  cout << "Finished initializing engine : " << t.stop() << endl;
 
   engine.run();
 }
