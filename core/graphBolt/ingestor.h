@@ -145,6 +145,8 @@ public:
                       bool symmetric, bool simpleFlag, bool fixedBatchFlag,
                       bool edgeValidityFlag, bool debugFlag,
                       bool &streamClosed) {
+    bool inputFileClosing = false;
+
     if (numEdges == 0) {
 #ifdef EDGEDATA
       return make_tuple(edgeArray(nullptr, nullptr, 0, 0),
@@ -180,7 +182,7 @@ public:
     long uncheckedEDCount = 0;
     long uncheckedEACountOrig = 0;
     long uncheckedEDCountOrig = 0;
-    long edgesRead = numEdges;
+    long edgesRead = 0;
     long edgesToRead = numEdges;
 
     long checkedEACount = 0;
@@ -206,30 +208,35 @@ public:
                     "to close"
                  << endl;
           } else {
-            edgesRead = i;
             cerr << "WARNING: Not enough edges to fulfill batch size. Only "
-                 << i << " edges read." << endl;
+                 << edgesRead << " edges read." << endl;
             break;
           }
         }
 
+        // read line
         std::getline(inputFile, line);
-        if ((line[0] == '%') || (line[0] == '#')) {
-          continue;
-        }
 
-        if (!inputFile.good()) {
-          edgesRead = i;
+        if (!inputFileClosing) {
+          // check file whether finished
+          inputFileClosing = !inputFile.good();
+
+        } else {
+          // do finish file
           streamClosed = true;
-          cout << "WARNING: Stream Closed. Only " << i << " edges read" << endl;
+          cout << "WARNING: Stream Closed. Only " << edgesRead << " edges read" << endl;
           break;
         }
 
-        // skip empty line
-        if (line.empty()) {
+        // skip invalid line
+        if (line.empty() || (line[0] == '%') || (line[0] == '#')) {
           continue;
         }
 
+        // accumulate edge count
+        ++edgesRead;
+
+        // parse line tokens
         tokens.clear();
         string buf;
         stringstream ss(line);
