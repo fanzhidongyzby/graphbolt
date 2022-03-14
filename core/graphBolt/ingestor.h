@@ -224,6 +224,12 @@ public:
           cout << "WARNING: Stream Closed. Only " << i << " edges read" << endl;
           break;
         }
+
+        // skip empty line
+        if (line.empty()) {
+          continue;
+        }
+
         tokens.clear();
         string buf;
         stringstream ss(line);
