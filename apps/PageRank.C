@@ -289,8 +289,8 @@ template <class vertex> void compute(graph<vertex> &G, commandLine config) {
   uintV n = G.n;
   int max_iters = config.getOptionLongValue("-maxIters", 10);
   double epsilon = config.getOptionDoubleValue("-epsilon", 0.01);
+  double damping = config.getOptionDoubleValue("-q", 0.85);
   max_iters += 1;
-  double damping = 0.85;
 
   PageRankInfo<vertex> global_info(&G, n, epsilon, damping);
 

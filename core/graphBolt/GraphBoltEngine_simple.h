@@ -254,6 +254,7 @@ public:
 
       vertex_value_old_prev[v] = vertexValueIdentity<VertexValueType>();
       vertex_value_old_curr[v] = vertexValueIdentity<VertexValueType>();
+      // init vertex_value_old_next as iter=0 values
       initializeVertexValue<VertexValueType>(v, vertex_value_old_next[v],
                                              global_info);
 
@@ -278,6 +279,8 @@ public:
 
     // ========== EDGE COMPUTATION - DIRECT CHANGES - for first iter ==========
     pre_compute_timer.start();
+
+    // Handle add edges changes, compute destination delta value
     parallel_for(long i = 0; i < edge_additions.size; i++) {
       uintV source = edge_additions.E[i].source;
       uintV destination = edge_additions.E[i].destination;
@@ -292,10 +295,13 @@ public:
       if (forceActivateVertexForIteration(source, 1, global_info_old)) {
 
         if (frontier_curr[source]) {
+          // ensure to re-compute source and generate latest source_change_in_contribution[source]
           changed[source] = true;
         }
         if (frontier_curr[destination]) {
-          changed[source] = true;
+          // a bug, replace as following:
+          changed[destination] = true;
+          // changed[source] = true;
         }
 
         AggregationValueType contrib_change;
@@ -331,6 +337,7 @@ public:
       }
     }
 
+    // Handle delete edges changes, compute destination delta value
     parallel_for(long i = 0; i < edge_deletions.size; i++) {
       uintV source = edge_deletions.E[i].source;
       uintV destination = edge_deletions.E[i].destination;
@@ -344,10 +351,13 @@ public:
       if (forceActivateVertexForIteration(source, 1, global_info_old)) {
         // Update frontier and changed values
         if (frontier_curr[source]) {
+          // ensure to re-compute source and generate latest source_change_in_contribution[source]
           changed[source] = true;
         }
         if (frontier_curr[destination]) {
-          changed[source] = true;
+          // a bug, replace as following:
+          changed[destination] = true;
+          // changed[source] = true;
         }
 
         AggregationValueType contrib_change;
@@ -393,6 +403,7 @@ public:
       should_switch_now = true;
     }
 
+    // The core of delta compute
     for (int iter = 1; iter < max_iterations; iter++) {
       // Perform switch if needed
       if (should_switch_now) {
@@ -411,6 +422,7 @@ public:
       use_delta = shouldUseDelta(iter);
 
       // ================ COPY - PREPARE CURRENT ITERATION ================
+      // Prepare old vertex values or switch to base graph compute
       {
         VertexValueType *temp1 = vertex_value_old_prev;
         vertex_value_old_prev = vertex_value_old_curr;
@@ -428,11 +440,13 @@ public:
       }
       copy_time += phase_timer.next();
       // ========== EDGE COMPUTATION - TRANSITIVE CHANGES ==========
+      // Compute source contribution for first iteration
       if ((use_source_contribution) && (iter == 1)) {
-        // Compute source contribution for first iteration
         parallel_for(uintV u = 0; u < n; u++) {
           if (frontier_curr[u]) {
             // compute source change in contribution
+            // compute current contribution
+            // vertex_values[iter - 1] point to vertex values in last iter on current graph
             AggregationValueType contrib_change =
                 aggregationValueIdentity<AggregationValueType>();
             sourceChangeInContribution<AggregationValueType, VertexValueType,
@@ -441,6 +455,9 @@ public:
                 vertex_values[iter - 1][u], global_info);
             addToAggregation(contrib_change, source_change_in_contribution[u],
                              global_info);
+
+            // retract previous contribution
+            // vertex_value_old_curr point to vertex values in last iter on previous graph
             sourceChangeInContribution<AggregationValueType, VertexValueType,
                                        GlobalInfoType>(
                 u, contrib_change, vertexValueIdentity<VertexValueType>(),
@@ -451,12 +468,15 @@ public:
         }
       }
 
+      // Compute destination delta value
       parallel_for(uintV u = 0; u < n; u++) {
+        // frontier_curr[u] represents the add/delete edge's source
         if (frontier_curr[u]) {
           // check for propagate and retract for the vertices.
           intE outDegree = my_graph.V[u].getOutDegree();
 
-          granular_for(i, 0, outDegree, (outDegree > 1024), {
+          parallel_for(int i = 0; i < outDegree; i++) {
+          // replace for debug: granular_for(i, 0, outDegree, (outDegree > 1024), {
             uintV v = my_graph.V[u].getOutNeighbor(i);
             bool ret = false;
             AggregationValueType contrib_change =
@@ -488,7 +508,8 @@ public:
               if (!changed[v])
                 changed[v] = 1;
             }
-          });
+          //replace for debug: });
+          }
         }
       }
       phase_time = phase_timer.next();
@@ -521,6 +542,7 @@ public:
           source_change_in_contribution[v] =
               aggregationValueIdentity<AggregationValueType>();
 
+          // Merge curr iter agg value
           if (notDelZero(new_value, vertex_values[iter - 1][v], global_info)) {
             // change is significant. Update vertex_values
             vertex_values[iter][v] = new_value;
@@ -545,6 +567,7 @@ public:
             vertex_values[iter][v] = vertex_values[iter - 1][v];
           }
 
+          // Retract next iter source_change_in_contribution to agg on previous graph
           if (notDelZero(vertex_value_old_next[v], vertex_value_old_curr[v],
                         global_info_old)) {
             // change is significant. Update v_change
@@ -571,11 +594,14 @@ public:
 
       // ========== EDGE COMPUTATION - DIRECT CHANGES - for next iter ==========
       bool has_direct_changes = false;
+
+      // Compute add edges' next iter destination delta
       parallel_for(long i = 0; i < edge_additions.size; i++) {
         uintV source = edge_additions.E[i].source;
         uintV destination = edge_additions.E[i].destination;
         AggregationValueType contrib_change;
 
+        // The edge source is active(not converged last iter or force-activated next iter), compute destination delta
         if (notDelZero(vertex_value_old_curr[source],
                       vertex_value_old_next[source], global_info_old) ||
             (forceActivateVertexForIteration(source, iter + 1,
@@ -619,6 +645,7 @@ public:
         }
       }
 
+      // Compute delete edges' next iter destination delta
       parallel_for(long i = 0; i < edge_deletions.size; i++) {
         uintV source = edge_deletions.E[i].source;
         uintV destination = edge_deletions.E[i].destination;
