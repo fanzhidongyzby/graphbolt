@@ -152,7 +152,7 @@ template <class GlobalInfoType>
 inline bool forceComputeVertexForIteration(const uintV &v, int iter,
                                            const GlobalInfoType &global_info) {
   if (iter == 1) {
-    return true;
+    return false;
   } else {
     return false;
   }
@@ -207,6 +207,11 @@ inline void computeFunction(const uintV &v,
                             const VertexValueType &vertex_value_curr,
                             VertexValueType &vertex_value_next,
                             GlobalInfoType &global_info) {
+  if (aggregation_value == aggregation_value_identity) {
+    vertex_value_next = initial_vertex_value;
+    return;
+  }
+
   vertex_value_next =
       (1 - global_info.damping) + (global_info.damping * aggregation_value);
 }
@@ -288,9 +293,9 @@ void printAdditionalData(ofstream &output_file, const uintV &v,
 template <class vertex> void compute(graph<vertex> &G, commandLine config) {
   uintV n = G.n;
   int max_iters = config.getOptionLongValue("-maxIters", 10);
-  double epsilon = config.getOptionDoubleValue("-epsilon", 0.01);
+  double epsilon = config.getOptionDoubleValue("-epsilon", 0.000001);
   double damping = config.getOptionDoubleValue("-q", 0.85);
-  max_iters += 1;
+  // max_iters += 1;
 
   PageRankInfo<vertex> global_info(&G, n, epsilon, damping);
 
