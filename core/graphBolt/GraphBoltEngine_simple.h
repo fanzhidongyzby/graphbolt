@@ -238,7 +238,7 @@ public:
     timer iteration_timer, phase_timer, full_timer, pre_compute_timer;
     double misc_time, copy_time, phase_time, iteration_time, pre_compute_time;
     iteration_time = 0;
-    full_timer.start();
+    // full_timer.start();
 
     // TODO : Realloc addition of new vertices
     n_old = n;
@@ -280,6 +280,10 @@ public:
     // ========== EDGE COMPUTATION - DIRECT CHANGES - for first iter ==========
     pre_compute_timer.start();
 
+    // 从这里开始统计迭代时间，忽略图更新时间
+    full_timer.start();
+
+    // 如果是第一轮迭代，把新增边的source的上批次contribution算出来（相对于0），并传播到新增边的destination的delta，累加
     // Handle add edges changes, compute destination delta value
     parallel_for(long i = 0; i < edge_additions.size; i++) {
       uintV source = edge_additions.E[i].source;
@@ -337,6 +341,7 @@ public:
       }
     }
 
+    // 如果是第一轮迭代，把删除边的source的上批次contribution算出来（相对于0），并传播到删除边的destination的delta，累减
     // Handle delete edges changes, compute destination delta value
     parallel_for(long i = 0; i < edge_deletions.size; i++) {
       uintV source = edge_deletions.E[i].source;
@@ -403,10 +408,12 @@ public:
       should_switch_now = true;
     }
 
+    // 开始迭代重放
     // The core of delta compute
     for (int iter = 1; iter < max_iterations; iter++) {
       // Perform switch if needed
       if (should_switch_now) {
+        // 增量计算完毕，切换为全量计算
         converged_iteration = performSwitch(iter);
         break;
       }
@@ -440,7 +447,8 @@ public:
       }
       copy_time += phase_timer.next();
       // ========== EDGE COMPUTATION - TRANSITIVE CHANGES ==========
-      // Compute source contribution for first iteration
+      // 第一轮迭代时，计算source的contribution变化（当前批的contribution - 上一批的contribution）
+      // Reset source contribution for first iteration
       if ((use_source_contribution) && (iter == 1)) {
         parallel_for(uintV u = 0; u < n; u++) {
           if (frontier_curr[u]) {
@@ -468,6 +476,7 @@ public:
         }
       }
 
+      // 把source的contribution变化累加传播到所有destination的delta（不用考虑destination是新的点还是已有的点，前边以后初始化好destination的delta了）
       // Compute destination delta value
       parallel_for(uintV u = 0; u < n; u++) {
         // frontier_curr[u] represents the add/delete edge's source
@@ -526,10 +535,12 @@ public:
         if (changed[v]) {
           frontier_curr[v] = 0;
 
+          // 把delta值更新到aggregation_values
           // delta has the current cumulative change for the vertex.
           // Update the aggregation value in history
           addToAggregation(delta[v], aggregation_values[iter][v], global_info);
 
+          // 根据aggregation_values执行compute计算
           VertexValueType new_value;
           computeFunction(v, aggregation_values[iter][v],
                           vertex_values[iter - 1][v], new_value, global_info);
@@ -537,6 +548,8 @@ public:
           if (forceActivateVertexForIteration(v, iter + 1, global_info)) {
             frontier_curr[v] = 1;
           }
+
+          // 重新计算目标点的contribution变化
           AggregationValueType contrib_change =
               aggregationValueIdentity<AggregationValueType>();
           source_change_in_contribution[v] =
@@ -595,6 +608,7 @@ public:
       // ========== EDGE COMPUTATION - DIRECT CHANGES - for next iter ==========
       bool has_direct_changes = false;
 
+      // 准备下次迭代的destination的delta
       // Compute add edges' next iter destination delta
       parallel_for(long i = 0; i < edge_additions.size; i++) {
         uintV source = edge_additions.E[i].source;
