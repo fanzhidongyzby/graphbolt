@@ -515,7 +515,7 @@ public:
 
   void printOutput() {
     string output_file_path = config.getOptionValue("-outputFile", "/tmp/");
-    bool should_print = true;
+    bool should_print = false;
     if (output_file_path.compare("/tmp/") == 0) {
       should_print = false;
     }

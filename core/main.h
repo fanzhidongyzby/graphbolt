@@ -36,6 +36,8 @@ using namespace std;
 template <class vertex> void compute(graph<vertex> &, commandLine);
 
 int parallel_main(int argc, char *argv[]) {
+  timer all;
+  all.start();
   commandLine P(argc, argv);
   char *iFile = P.getArgument(0);
   bool symmetric = P.getOptionValue("-s");
@@ -77,6 +79,8 @@ int parallel_main(int argc, char *argv[]) {
 
     G.del();
   }
+
+  cout << "Total Cost : " << all.stop() << endl;
 }
 
 #endif

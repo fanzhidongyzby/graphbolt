@@ -398,6 +398,7 @@ graph<vertex> readGraphFromFile(char *fname, bool isSymmetric, bool simpleFlag,
 #ifdef EDGEDATA
     quickSort(temp, m, tripleBothCmp());
 #else
+    // 保留影响性能的代码
     quickSort(temp, m, pairBothCmp<intE>());
 #endif
     // remove duplicates

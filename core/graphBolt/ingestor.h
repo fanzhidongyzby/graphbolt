@@ -293,6 +293,7 @@ public:
       quickSort(uncheckedEA, uncheckedEACount, tripleBothCmp());
       quickSort(uncheckedED, uncheckedEDCount, tripleBothCmp());
 #else
+      // 保留影响性能的代码
       quickSort(uncheckedEA, uncheckedEACount, pairBothCmp<uintE>());
       quickSort(uncheckedED, uncheckedEDCount, pairBothCmp<uintE>());
 #endif
@@ -471,6 +472,7 @@ public:
 
       // ensure there are no duplicates within the edges to add/delete
       if (edgeValidityFlag && simpleFlag) {
+        // 保留影响性能的代码
         quickSort(EA, checkedEACount, edgeBothCmp());
         quickSort(ED, checkedEDCount, edgeBothCmp());
         checkedEACount = removeDuplicates(EA, checkedEACount, numEdges,

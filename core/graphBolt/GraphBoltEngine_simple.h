@@ -64,7 +64,68 @@ public:
                     GlobalInfoType>::initTemporaryStructures(start_index,
                                                              end_index);
   }
-  // ======================================================================
+
+  void prepareHistory(int iter) {
+    parallel_for (uintV v = 0; v < n; v++) {
+      vertex_values[iter][v] = vertex_values[iter - 1][v];
+      aggregation_values[iter][v] = aggregation_values[iter - 1][v];
+      delta[v] = aggregationValueIdentity<AggregationValueType>();
+    }
+  }
+
+  void doCompute(int iter, uintV v) {
+    VertexValueType new_value;
+    computeFunction(v, aggregation_values[iter][v],
+                    vertex_values[iter - 1][v], new_value, global_info);
+
+    // Check if change is significant
+    if (notDelZero(new_value, vertex_values[iter - 1][v], global_info)) {
+      // change is significant. Update vertex_values
+      vertex_values[iter][v] = new_value;
+      // Set active for next iteration.
+      frontier_curr[v] = 1;
+    } else {
+      // change is not significant. Copy vertex_values[iter-1]
+      vertex_values[iter][v] = vertex_values[iter - 1][v];
+    }
+  }
+
+  void saveDelta(int iter, uintV v) {
+    addToAggregation(delta[v], aggregation_values[iter][v],
+                     global_info);
+    delta[v] = aggregationValueIdentity<AggregationValueType>();
+  }
+
+  void propagate(int iter, uintV u) {
+    intE outDegree = my_graph.V[u].getOutDegree();
+    granular_for(j, 0, outDegree, (outDegree > 1024), {
+      uintV v = my_graph.V[u].getOutNeighbor(j);
+      AggregationValueType contrib_change =
+          use_source_contribution
+          ? source_change_in_contribution[u]
+          : aggregationValueIdentity<AggregationValueType>();
+#ifdef EDGEDATA
+      EdgeData *edge_data = my_graph.V[u].getOutEdgeData(j);
+#else
+      EdgeData *edge_data = &emptyEdgeData;
+#endif
+      bool ret =
+          edgeFunction(u, v, *edge_data, vertex_values[iter - 1][u],
+                       contrib_change, global_info);
+      if (ret) {
+        if (use_lock) {
+          vertex_locks[v].writeLock();
+          addToAggregation(contrib_change, delta[v], global_info);
+          vertex_locks[v].unlock();
+        } else {
+          addToAggregationAtomic(contrib_change, delta[v], global_info);
+        }
+        if (!frontier_next[v])
+          frontier_next[v] = 1;
+      }
+    });
+  }
+// ======================================================================
   // TRADITIONAL INCREMENTAL COMPUTATION
   // ======================================================================
   // TODO : Currently, max_iterations = history_iterations.
@@ -92,11 +153,7 @@ public:
         // ========== COPY - Prepare curr iteration ==========
         if (iter > 0) {
           // Copy the aggregate and actual value from iter-1 to iter
-          parallel_for(uintV v = 0; v < n; v++) {
-            vertex_values[iter][v] = vertex_values[iter - 1][v];
-            aggregation_values[iter][v] = aggregation_values[iter - 1][v];
-            delta[v] = aggregationValueIdentity<AggregationValueType>();
-          }
+          prepareHistory(iter);
         }
         use_delta = shouldUseDelta(iter);
 
@@ -126,33 +183,7 @@ public:
         parallel_for(uintV u = 0; u < n; u++) {
           if (frontier_curr[u]) {
             // check for propagate and retract for the vertices.
-            intE outDegree = my_graph.V[u].getOutDegree();
-            granular_for(j, 0, outDegree, (outDegree > 1024), {
-              uintV v = my_graph.V[u].getOutNeighbor(j);
-              AggregationValueType contrib_change =
-                  use_source_contribution
-                      ? source_change_in_contribution[u]
-                      : aggregationValueIdentity<AggregationValueType>();
-#ifdef EDGEDATA
-              EdgeData *edge_data = my_graph.V[u].getOutEdgeData(j);
-#else
-              EdgeData *edge_data = &emptyEdgeData;
-#endif
-              bool ret =
-                  edgeFunction(u, v, *edge_data, vertex_values[iter - 1][u],
-                               contrib_change, global_info);
-              if (ret) {
-                if (use_lock) {
-                  vertex_locks[v].writeLock();
-                  addToAggregation(contrib_change, delta[v], global_info);
-                  vertex_locks[v].unlock();
-                } else {
-                  addToAggregationAtomic(contrib_change, delta[v], global_info);
-                }
-                if (!frontier_next[v])
-                  frontier_next[v] = 1;
-              }
-            });
+            propagate(iter, u);
           }
         }
 
@@ -168,27 +199,13 @@ public:
               forceComputeVertexForIteration(v, iter, global_info)) {
 
             frontier_next[v] = 0;
-            // Update aggregation value and reset change received[v] (i.e.
-            // delta[v])
-            addToAggregation(delta[v], aggregation_values[iter][v],
-                             global_info);
-            delta[v] = aggregationValueIdentity<AggregationValueType>();
+
+            // Update aggregation value and reset change received[v] (i.e. delta[v])
+            saveDelta(iter, v);
 
             // Calculate new_value based on the updated aggregation value
-            VertexValueType new_value;
-            computeFunction(v, aggregation_values[iter][v],
-                            vertex_values[iter - 1][v], new_value, global_info);
+            doCompute(iter, v);
 
-            // Check if change is significant
-            if (notDelZero(new_value, vertex_values[iter - 1][v], global_info)) {
-              // change is significant. Update vertex_values
-              vertex_values[iter][v] = new_value;
-              // Set active for next iteration.
-              frontier_curr[v] = 1;
-            } else {
-              // change is not significant. Copy vertex_values[iter-1]
-              vertex_values[iter][v] = vertex_values[iter - 1][v];
-            }
           }
           frontier_curr[v] =
               frontier_curr[v] ||
